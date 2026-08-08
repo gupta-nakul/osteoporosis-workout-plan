@@ -27,7 +27,7 @@ const accountOptions = [
   { label: "Patient", email: "patient@example.com", helper: "Workout access" },
   { label: "Admin", email: "admin@example.com", helper: "Plan editor" },
 ];
-const fallbackWalkTimerSeconds = 5 * 60;
+const defaultRestSeconds = 30;
 
 type PreviewState = {
   exerciseId: string;
@@ -35,16 +35,74 @@ type PreviewState = {
   label: string;
 };
 
-function walkTimerSecondsFromDose(dose: string) {
-  const match = dose.match(/(\d+)(?:-\d+)?\s*(?:min|minute)/i);
-  if (!match) return fallbackWalkTimerSeconds;
-  return Number(match[1]) * 60;
-}
+type TimerConfig = NonNullable<Exercise["timer"]>;
+type GuidedTimerPhase = "work" | "rest" | "complete";
+type GuidedTimerState = {
+  exerciseId: string;
+  phase: GuidedTimerPhase;
+  setIndex: number;
+  endsAt: number | null;
+};
+
+let dingAudioContext: AudioContext | null = null;
 
 function formatTimer(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function getAudioContext() {
+  if (typeof window === "undefined") return null;
+  const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+  const AudioContextConstructor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
+  if (!AudioContextConstructor) return null;
+  dingAudioContext ??= new AudioContextConstructor();
+  return dingAudioContext;
+}
+
+function primeDing() {
+  const context = getAudioContext();
+  if (context?.state === "suspended") {
+    void context.resume();
+  }
+}
+
+function playDing() {
+  const context = getAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") {
+    void context.resume();
+  }
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, context.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.12);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.48);
+}
+
+function createTimerState(exercise: Exercise, now = Date.now()): GuidedTimerState | null {
+  if (!exercise.timer) return null;
+  return {
+    exerciseId: exercise.id,
+    phase: "work",
+    setIndex: 0,
+    endsAt: exercise.timer.workSeconds ? now + exercise.timer.workSeconds * 1000 : null,
+  };
+}
+
+function timerTotalSeconds(config: TimerConfig, phase: GuidedTimerPhase) {
+  if (phase === "rest") return config.restSeconds ?? defaultRestSeconds;
+  if (phase === "work") return config.workSeconds ?? 0;
+  return 0;
 }
 
 function getIstParts(date = new Date()) {
@@ -277,6 +335,7 @@ export function WorkoutApp() {
   }
 
   function startSession() {
+    primeDing();
     setPainAfter(0);
     setNote("");
     setStepIndex(0);
@@ -591,32 +650,122 @@ function WorkoutPlayer({
   const nextExercise = exercises[stepIndex + 1];
   const completedIds = new Set(exerciseLog.map((item) => item.exerciseId));
   const remainingCount = Math.max(0, exercises.length - stepIndex - 1);
-  const isWalkExercise = currentExercise.id === "easy-walk";
-  const walkTimerSeconds = isWalkExercise ? walkTimerSecondsFromDose(currentExercise.dose) : 0;
-  const [walkTimerEndsAt, setWalkTimerEndsAt] = useState<number | null>(null);
+  const timerConfig = currentExercise.timer;
+  const [timerState, setTimerState] = useState<GuidedTimerState | null>(() => createTimerState(currentExercise));
   const [timerNow, setTimerNow] = useState(Date.now());
 
   useEffect(() => {
-    if (!isWalkExercise) {
-      setWalkTimerEndsAt(null);
+    const now = Date.now();
+    setTimerNow(now);
+    setTimerState(createTimerState(currentExercise, now));
+  }, [currentExercise, stepIndex]);
+
+  useEffect(() => {
+    if (!timerState?.endsAt) return;
+    const timer = window.setInterval(() => setTimerNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [timerState?.endsAt]);
+
+  const secondsRemaining = timerState?.endsAt
+    ? Math.max(0, Math.ceil((timerState.endsAt - timerNow) / 1000))
+    : 0;
+  const phaseTotalSeconds = timerConfig && timerState ? timerTotalSeconds(timerConfig, timerState.phase) : 0;
+
+  function startWorkSet(setIndex: number) {
+    if (!timerConfig) return;
+    const now = Date.now();
+    setTimerNow(now);
+    setTimerState({
+      exerciseId: currentExercise.id,
+      phase: "work",
+      setIndex,
+      endsAt: timerConfig.workSeconds ? now + timerConfig.workSeconds * 1000 : null,
+    });
+  }
+
+  function finishCurrentSet() {
+    if (!timerConfig || !timerState) return;
+    const nextSetIndex = timerState.setIndex + 1;
+
+    if (nextSetIndex >= timerConfig.sets) {
+      setTimerState({
+        exerciseId: currentExercise.id,
+        phase: "complete",
+        setIndex: timerState.setIndex,
+        endsAt: null,
+      });
+      return;
+    }
+
+    const restSeconds = timerConfig.restSeconds ?? defaultRestSeconds;
+    if (!restSeconds) {
+      startWorkSet(nextSetIndex);
       return;
     }
 
     const now = Date.now();
     setTimerNow(now);
-    setWalkTimerEndsAt(now + walkTimerSeconds * 1000);
-  }, [currentExercise.id, isWalkExercise, stepIndex, walkTimerSeconds]);
+    setTimerState({
+      exerciseId: currentExercise.id,
+      phase: "rest",
+      setIndex: timerState.setIndex,
+      endsAt: now + restSeconds * 1000,
+    });
+  }
+
+  function restartTimer() {
+    const now = Date.now();
+    setTimerNow(now);
+    setTimerState(createTimerState(currentExercise, now));
+  }
+
+  function handlePrimaryAction() {
+    if (!timerConfig || !timerState) {
+      onMark("completed");
+      return;
+    }
+
+    if (timerState.phase === "rest") {
+      startWorkSet(timerState.setIndex + 1);
+      return;
+    }
+
+    if (timerState.phase === "complete") {
+      onMark("completed");
+      return;
+    }
+
+    if (timerConfig.sets === 1 && timerConfig.workSeconds) {
+      onMark("completed");
+      return;
+    }
+
+    finishCurrentSet();
+  }
 
   useEffect(() => {
-    if (!walkTimerEndsAt) return;
-    const timer = window.setInterval(() => setTimerNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [walkTimerEndsAt]);
+    if (!timerConfig || !timerState?.endsAt || secondsRemaining > 0) return;
+    playDing();
 
-  const walkSecondsRemaining = walkTimerEndsAt
-    ? Math.max(0, Math.ceil((walkTimerEndsAt - timerNow) / 1000))
-    : walkTimerSeconds;
-  const walkTimerDone = isWalkExercise && walkSecondsRemaining === 0;
+    if (timerState.phase === "work") {
+      finishCurrentSet();
+      return;
+    }
+
+    if (timerState.phase === "rest") {
+      startWorkSet(timerState.setIndex + 1);
+    }
+  }, [secondsRemaining, timerConfig, timerState]);
+
+  const primaryActionLabel = !timerConfig || !timerState
+    ? "Mark done"
+    : timerState.phase === "rest"
+      ? "Skip recovery"
+      : timerState.phase === "complete"
+        ? currentExercise.id === "easy-walk" ? "Mark walk done" : "Mark done"
+        : timerConfig.sets > 1
+          ? `Set ${timerState.setIndex + 1} done`
+          : currentExercise.id === "easy-walk" ? "Mark walk done" : "Mark done";
 
   return (
     <section className="workout-player">
@@ -657,11 +806,13 @@ function WorkoutPlayer({
 
       <div className="player-hero">
         <div className="player-video">
-          {isWalkExercise ? (
-            <WalkTimer
-              done={walkTimerDone}
-              durationSeconds={walkTimerSeconds}
-              secondsRemaining={walkSecondsRemaining}
+          {timerConfig && timerState ? (
+            <GuidedTimerPanel
+              config={timerConfig}
+              onRestart={restartTimer}
+              phaseTotalSeconds={phaseTotalSeconds}
+              secondsRemaining={secondsRemaining}
+              state={timerState}
             />
           ) : (
             <ExerciseVideo exercise={currentExercise} />
@@ -711,7 +862,7 @@ function WorkoutPlayer({
       />
 
       <div className="workout-action-bar" aria-label="Exercise actions">
-        <button onClick={() => onMark("completed")}>{isWalkExercise ? "Mark walk done" : "Mark done"}</button>
+        <button onClick={handlePrimaryAction}>{primaryActionLabel}</button>
         <button onClick={() => onMark("skipped")}>Skip exercise</button>
         <button className="danger" onClick={() => onMark("painful")}>Record pain</button>
       </div>
@@ -719,24 +870,60 @@ function WorkoutPlayer({
   );
 }
 
-function WalkTimer({
-  done,
-  durationSeconds,
+function GuidedTimerPanel({
+  config,
+  onRestart,
+  phaseTotalSeconds,
   secondsRemaining,
+  state,
 }: {
-  done: boolean;
-  durationSeconds: number;
+  config: TimerConfig;
+  onRestart: () => void;
+  phaseTotalSeconds: number;
   secondsRemaining: number;
+  state: GuidedTimerState;
 }) {
+  const isUntimedWork = state.phase === "work" && !config.workSeconds;
+  const progress = phaseTotalSeconds > 0
+    ? Math.max(0, Math.min(1, 1 - secondsRemaining / phaseTotalSeconds))
+    : 0;
+  const phaseLabel = state.phase === "rest"
+    ? "Recovery"
+    : state.phase === "complete"
+      ? "Complete"
+      : config.workLabel ?? "Set";
+  const timerText = state.phase === "complete" ? "Done" : isUntimedWork ? "Ready" : formatTimer(secondsRemaining);
+  const detail = state.phase === "complete"
+    ? "Timer complete. Tap Mark done when she is safely ready."
+    : state.phase === "rest"
+      ? `${config.restSeconds ?? defaultRestSeconds} second recovery before the next set.`
+      : isUntimedWork
+        ? "Complete this set at a slow, supported pace. Recovery starts after Set done."
+        : "Timer started automatically for this set.";
+
   return (
-    <div className={done ? "walk-timer done" : "walk-timer"} aria-live="polite">
-      <span>Walk timer</span>
-      <strong>{formatTimer(secondsRemaining)}</strong>
+    <div
+      className={
+        state.phase === "complete"
+          ? "guided-timer done"
+          : state.phase === "rest"
+            ? "guided-timer rest"
+            : "guided-timer"
+      }
+      aria-live="polite"
+    >
+      <span>{phaseLabel}</span>
+      <strong>{timerText}</strong>
       <small>
-        {done
-          ? "Time complete. Tap Mark walk done when she has safely stopped."
-          : `${Math.round(durationSeconds / 60)} minute target started automatically.`}
+        Set {state.setIndex + 1} of {config.sets}
       </small>
+      <div className="timer-track" aria-hidden="true">
+        <i style={{ width: `${progress * 100}%` }} />
+      </div>
+      <p>{detail}</p>
+      <button type="button" onClick={onRestart}>
+        Restart exercise timer
+      </button>
     </div>
   );
 }

@@ -7,6 +7,12 @@ export type Exercise = {
   videoUrl: string;
   cues: string[];
   stopRules: string[];
+  timer?: {
+    sets: number;
+    workSeconds?: number;
+    restSeconds?: number;
+    workLabel?: string;
+  };
 };
 
 export type WorkoutDay = {
@@ -86,7 +92,7 @@ export const defaultPlan: WorkoutPlan = {
         "heel-raises",
         "ab-brace",
         "heel-slides",
-        "tandem-stance",
+        "clock-taps",
       ],
     },
     tuesday: {
@@ -99,7 +105,7 @@ export const defaultPlan: WorkoutPlan = {
         "shoulder-setting",
         "band-row",
         "hip-abduction",
-        "tandem-stance",
+        "side-steps",
         "wall-posture",
       ],
     },
@@ -150,7 +156,7 @@ export const defaultPlan: WorkoutPlan = {
         "heel-raises",
         "ab-brace",
         "heel-slides",
-        "tandem-stance",
+        "clock-taps",
       ],
     },
     saturday: {
@@ -160,7 +166,7 @@ export const defaultPlan: WorkoutPlan = {
       estimate: "18-22 min",
       exerciseIds: [
         "easy-walk",
-        "tandem-stance",
+        "side-steps",
         "single-leg-stance",
         "wall-posture",
         "heel-raises",
@@ -184,6 +190,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=xom-st-GwW4",
       cues: ["Hold support.", "Lift feet slowly.", "Stay tall."],
       stopRules: ["Stop if heel pain increases.", "Stop if balance feels unsafe."],
+      timer: { sets: 1, workSeconds: 120, workLabel: "March" },
     },
     {
       id: "shoulder-setting",
@@ -194,6 +201,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=ouRhQE2iOI8",
       cues: ["Sit or stand tall.", "Gently pull shoulder blades back.", "Do not arch the back."],
       stopRules: ["Stop if neck pain increases."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "hinge-wall",
@@ -204,6 +212,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=4VDafFbBSao",
       cues: ["Push hips backward.", "Keep back long.", "Do not round forward."],
       stopRules: ["Stop if back pain sharpens."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "sit-to-stand",
@@ -214,6 +223,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=ITv-_BkcrD0",
       cues: ["Feet flat.", "Small hip hinge.", "Stand using both legs.", "Sit slowly."],
       stopRules: ["Stop if knee, back, or leg pain rises above 3/10."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "band-row",
@@ -224,6 +234,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=db43OS-4ruY",
       cues: ["Anchor band at chest height.", "Pull elbows backward.", "Do not lean backward."],
       stopRules: ["Stop if back arches or shoulder pain appears."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "hip-abduction",
@@ -234,6 +245,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=e7MD61ENyBY",
       cues: ["Toes face forward.", "Move leg sideways.", "Keep torso still."],
       stopRules: ["Stop if pain travels into thigh or leg."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "heel-raises",
@@ -244,6 +256,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=MW2WG5l-fYE",
       cues: ["Rise slowly.", "Lower slowly.", "Use only comfortable range."],
       stopRules: ["Stop if heel pain increases."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "ab-brace",
@@ -254,6 +267,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=J_2ImNPjxtc",
       cues: ["Lie with knees bent.", "Tighten abdomen gently.", "Keep breathing."],
       stopRules: ["Stop if breath-holding or back pain occurs."],
+      timer: { sets: 2, workSeconds: 40, restSeconds: 30, workLabel: "Brace holds" },
     },
     {
       id: "heel-slides",
@@ -264,16 +278,29 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=rAMPY8lAbfY",
       cues: ["Brace gently.", "Slide heel away.", "Stop before back arches."],
       stopRules: ["Stop if buttock, thigh, or leg symptoms increase."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
-      id: "tandem-stance",
-      name: "Tandem Stance",
+      id: "clock-taps",
+      name: "Supported Clock Taps",
       category: "balance",
-      dose: "2 x 30-40 seconds each side",
+      dose: "2 sets x 5 taps each direction",
       equipment: "Counter",
-      videoUrl: "https://www.youtube.com/watch?v=ra7tzlPxnsQ",
-      cues: ["Stand beside support.", "One foot in front.", "Hold support as needed."],
-      stopRules: ["Stop if balance feels unsafe."],
+      videoUrl: "",
+      cues: ["Hold the counter.", "Stand tall on one leg.", "Tap the other foot forward, side, and back.", "Move slowly."],
+      stopRules: ["Stop if balance feels unsafe.", "Stop if hip, back, or leg pain increases."],
+      timer: { sets: 2, restSeconds: 30 },
+    },
+    {
+      id: "side-steps",
+      name: "Supported Side Steps",
+      category: "balance",
+      dose: "2 sets x 10 steps each direction",
+      equipment: "Counter or wall",
+      videoUrl: "",
+      cues: ["Stay tall.", "Step sideways slowly.", "Keep toes forward.", "Use support as needed."],
+      stopRules: ["Stop if balance feels unsafe.", "Stop if hip, back, or leg pain increases."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "easy-walk",
@@ -284,6 +311,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "",
       cues: ["Flat surface.", "Easy pace.", "Use the in-app timer.", "Switch to marching if heel pain rises."],
       stopRules: ["Stop if heel pain worsens or leg pain spreads."],
+      timer: { sets: 1, workSeconds: 720, workLabel: "Walk" },
     },
     {
       id: "single-leg-stance",
@@ -294,6 +322,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=7SF7AYh2_Yw",
       cues: ["Hold counter.", "Lift one foot slightly.", "Stay tall."],
       stopRules: ["Stop if balance feels unsafe."],
+      timer: { sets: 2, workSeconds: 30, restSeconds: 30, workLabel: "Balance hold" },
     },
     {
       id: "wall-posture",
@@ -304,6 +333,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=5UhS6k8yBDg",
       cues: ["Chin gently back.", "Chest relaxed.", "No forced arch."],
       stopRules: ["Stop if neck or back pain increases."],
+      timer: { sets: 3, workSeconds: 45, restSeconds: 30, workLabel: "Posture hold" },
     },
     {
       id: "wall-pushups",
@@ -314,6 +344,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=wIPJvBQs7RA",
       cues: ["Hands at chest height.", "Body in one line.", "Move slowly."],
       stopRules: ["Stop if shoulder, wrist, or back pain appears."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "hip-extension",
@@ -324,6 +355,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=OaUMKUEoFQ4",
       cues: ["Move leg slightly backward.", "Squeeze buttock.", "Do not arch lower back."],
       stopRules: ["Stop if back or leg symptoms increase."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "biceps-curl",
@@ -334,6 +366,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=cQsU9dbDMo0",
       cues: ["Sit or stand upright.", "Elbows near ribs.", "Do not lean backward."],
       stopRules: ["Stop if back arches or shoulder pain appears."],
+      timer: { sets: 2, restSeconds: 30 },
     },
     {
       id: "glute-squeeze",
@@ -344,6 +377,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=sH-4ZvZlwC8",
       cues: ["Lie with knees bent.", "Tighten both buttocks.", "Do not lift hips yet."],
       stopRules: ["Stop if buttock, thigh, or leg symptoms increase."],
+      timer: { sets: 2, workSeconds: 50, restSeconds: 30, workLabel: "Glute holds" },
     },
     {
       id: "modified-bird-dog",
@@ -354,6 +388,7 @@ export const defaultPlan: WorkoutPlan = {
       videoUrl: "https://www.youtube.com/watch?v=9trxFsQ_tFw",
       cues: ["Hands and knees.", "Slide one arm forward slightly.", "Keep spine neutral."],
       stopRules: ["Do not progress if unstable.", "Stop if pain spreads down the leg."],
+      timer: { sets: 2, restSeconds: 30 },
     },
   ].map((exercise) => ({
     ...exercise,

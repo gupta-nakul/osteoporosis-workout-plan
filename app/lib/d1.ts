@@ -10,6 +10,7 @@ import {
 const PLAN_KEY = "active-plan";
 const SELECTED_VIDEOS_KEY = "selected-videos-2026-08-04";
 const INTERMEDIATE_PLAN_KEY = "intermediate-plan-2026-08-06";
+const GUIDED_TIMERS_PLAN_KEY = "guided-timers-plan-2026-08-08";
 
 function reconcilePlanVideos(plan: WorkoutPlan) {
   let changed = false;
@@ -35,7 +36,7 @@ function reconcilePlanVideos(plan: WorkoutPlan) {
   return { changed, plan: changed ? { ...plan, exercises } : plan };
 }
 
-function applyIntermediatePlanUpgrade(plan: WorkoutPlan) {
+function applyDefaultPlanUpgrade(plan: WorkoutPlan) {
   const defaultsById = new Map(defaultPlan.exercises.map((exercise) => [exercise.id, exercise]));
   const exercises = defaultPlan.exercises.map((defaultExercise) => {
     const existingExercise = plan.exercises.find((exercise) => exercise.id === defaultExercise.id);
@@ -146,7 +147,7 @@ export async function readPlan(): Promise<WorkoutPlan> {
     .first<{ value: string }>();
 
   if (!intermediatePlanApplied?.value) {
-    storedPlan = applyIntermediatePlanUpgrade(storedPlan);
+    storedPlan = applyDefaultPlanUpgrade(storedPlan);
     await savePlan(storedPlan);
     await db
       .prepare(
@@ -155,6 +156,24 @@ export async function readPlan(): Promise<WorkoutPlan> {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
       )
       .bind(INTERMEDIATE_PLAN_KEY, "true")
+      .run();
+  }
+
+  const guidedTimersPlanApplied = await db
+    .prepare("SELECT value FROM app_state WHERE key = ?")
+    .bind(GUIDED_TIMERS_PLAN_KEY)
+    .first<{ value: string }>();
+
+  if (!guidedTimersPlanApplied?.value) {
+    storedPlan = applyDefaultPlanUpgrade(storedPlan);
+    await savePlan(storedPlan);
+    await db
+      .prepare(
+        `INSERT INTO app_state (key, value, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(GUIDED_TIMERS_PLAN_KEY, "true")
       .run();
   }
 
